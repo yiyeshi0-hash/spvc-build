@@ -2,24 +2,37 @@ name: build-spvc
 on: [push]
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: extract
+      - name: extract spirv-cross
+        run: tar -xzf spirv-cross-src.tar.gz
+      - name: setup toolchain + iOS SDK
         run: |
-          tar -xzf spirv-cross-src.tar.gz
-          ls -d SPIRV-Cross-*
-      - name: cmake
+          sudo apt-get update -q
+          sudo apt-get install -y -q clang lld unzip libc++-dev
+          curl -sL -o sdk.zip "https://github.com/xybp888/iOS-SDKs/releases/download/iOS26.2-SDKs/iPhoneOS26.2.sdk.zip"
+          sudo mkdir -p /opt/sdk && sudo unzip -q sdk.zip -d /opt/sdk
+          find /opt/sdk -maxdepth 2 -name "*.sdk"
+      - name: compile spvc
         run: |
+          SDK=$(find /opt/sdk -maxdepth 2 -name "*.sdk" | head -1)
+          echo "SDK=$SDK"
           SRC=$(ls -d SPIRV-Cross-* | head -1)
           cd "$SRC"
-          cmake -B build -DCMAKE_BUILD_TYPE=Release             -DSPIRV_CROSS_C_API=ON             -DSPIRV_CROSS_ENABLE_MSL=ON             -DSPIRV_CROSS_ENABLE_GLSL=ON             -DSPIRV_CROSS_ENABLE_HLSL=ON             -DSPIRV_CROSS_ENABLE_CPP=ON             -DSPIRV_CROSS_ENABLE_UTIL=ON             -DSPIRV_CROSS_ENABLE_TESTS=OFF             -DCMAKE_SYSTEM_NAME=iOS             -DCMAKE_OSX_ARCHITECTURES=arm64             -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
-          cmake --build build --target spirv-cross-c-shared -j4
-      - name: find artifact
-        run: |
-          find . -name "*spirv-cross-c-shared*" -o -name "*.dylib" | grep -v build/CMakeFiles | head -20
+          TGT="--target=arm64-apple-ios15.0 -isysroot $SDK -mios-version-min=15.0 -stdlib=libc++ -I/usr/include/c++/v1"
+          clang++ $TGT -std=c++17 -O2 -fvisibility=hidden -c \
+            spirv_cross.cpp spirv_cross_parsed_ir.cpp spirv_cfg.cpp spirv_parser.cpp \
+            spirv_glsl.cpp spirv_hlsl.cpp spirv_msl.cpp spirv_reflect.cpp spirv_cpp.cpp \
+            spirv_cross_containers.cpp
+          clang $TGT -O2 -c spirv_cross_c.c
+          clang++ $TGT -dynamiclib -o libspvc.dylib *.o -Wl,-install_name,@rpath/libspvc.dylib
+          file libspvc.dylib
+          ls -la libspvc.dylib
+          # 验证 MSL 符号
+          strings libspvc.dylib | grep -c spvc_compiler_msl
       - uses: actions/upload-artifact@v4
         with:
           name: spvc-ios
           path: |
-            **/libspirv-cross-c-shared*.dylib
+            **/libspvc.dylib
