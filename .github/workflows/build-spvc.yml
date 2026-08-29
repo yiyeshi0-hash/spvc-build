@@ -1,0 +1,25 @@
+name: build-spvc
+on: [push]
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: extract
+        run: |
+          tar -xzf spirv-cross-src.tar.gz
+          ls -d SPIRV-Cross-*
+      - name: cmake
+        run: |
+          SRC=$(ls -d SPIRV-Cross-* | head -1)
+          cd "$SRC"
+          cmake -B build -DCMAKE_BUILD_TYPE=Release             -DSPIRV_CROSS_C_API=ON             -DSPIRV_CROSS_ENABLE_MSL=ON             -DSPIRV_CROSS_ENABLE_GLSL=ON             -DSPIRV_CROSS_ENABLE_HLSL=ON             -DSPIRV_CROSS_ENABLE_CPP=ON             -DSPIRV_CROSS_ENABLE_UTIL=ON             -DSPIRV_CROSS_ENABLE_TESTS=OFF             -DCMAKE_SYSTEM_NAME=iOS             -DCMAKE_OSX_ARCHITECTURES=arm64             -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
+          cmake --build build --target spirv-cross-c-shared -j4
+      - name: find artifact
+        run: |
+          find . -name "*spirv-cross-c-shared*" -o -name "*.dylib" | grep -v build/CMakeFiles | head -20
+      - uses: actions/upload-artifact@v4
+        with:
+          name: spvc-ios
+          path: |
+            **/libspirv-cross-c-shared*.dylib
