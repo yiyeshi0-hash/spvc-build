@@ -20,15 +20,15 @@ jobs:
         run: |
           SRC=$(ls -d SPIRV-Cross-* | head -1)
           cd "$SRC"
-          ls *.cpp *.c
           TGT="--target=arm64-apple-ios15.0 -isysroot $SDK -mios-version-min=15.0 -stdlib=libc++ -I/usr/include/c++/v1"
-          CPPS=$(ls *.cpp | tr '\n' ' ')
-          clang++ $TGT -std=c++17 -O2 -fvisibility=hidden -c $CPPS
-          clang $TGT -O2 -c spirv_cross_c.c
+          CPPS=$(ls *.cpp | grep -v '^main.cpp' | tr '\n' ' ')
+          echo "sources: $CPPS"
+          clang++ $TGT -std=c++17 -O2 -c $CPPS
           clang++ $TGT -dynamiclib -o libspvc.dylib *.o -Wl,-install_name,@rpath/libspvc.dylib
           file libspvc.dylib
           ls -la libspvc.dylib
           echo "MSL symbols: $(strings libspvc.dylib | grep -c spvc_compiler_msl)"
+          echo "exports: $(nm -gU libspvc.dylib 2>/dev/null | wc -l)"
       - uses: actions/upload-artifact@v4
         with:
           name: spvc-ios
