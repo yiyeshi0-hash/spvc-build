@@ -24,7 +24,7 @@ jobs:
           CPPS=$(ls *.cpp | grep -v '^main.cpp' | tr '\n' ' ')
           echo "sources: $CPPS"
           clang++ $TGT -std=c++17 -O2 -c $CPPS
-          clang++ $TGT -dynamiclib -o libspvc.dylib *.o -Wl,-install_name,@rpath/libspvc.dylib
+          clang++ $TGT -dynamiclib -fuse-ld=lld -o libspvc.dylib *.o -Wl,-install_name,@rpath/libspvc.dylib
           file libspvc.dylib
           ls -la libspvc.dylib
           echo "MSL symbols: $(strings libspvc.dylib | grep -c spvc_compiler_msl)"
