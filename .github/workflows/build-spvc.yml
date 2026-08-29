@@ -13,24 +13,22 @@ jobs:
           sudo apt-get install -y -q clang lld unzip libc++-dev
           curl -sL -o sdk.zip "https://github.com/xybp888/iOS-SDKs/releases/download/iOS26.2-SDKs/iPhoneOS26.2.sdk.zip"
           sudo mkdir -p /opt/sdk && sudo unzip -q sdk.zip -d /opt/sdk
-          find /opt/sdk -maxdepth 2 -name "*.sdk"
+          SDK=$(find /opt/sdk -maxdepth 2 -name "*.sdk" | grep -v __MACOSX | head -1)
+          echo "SDK=$SDK" >> $GITHUB_ENV
+          echo "using SDK: $SDK"
       - name: compile spvc
         run: |
-          SDK=$(find /opt/sdk -maxdepth 2 -name "*.sdk" | head -1)
-          echo "SDK=$SDK"
           SRC=$(ls -d SPIRV-Cross-* | head -1)
           cd "$SRC"
+          ls *.cpp *.c
           TGT="--target=arm64-apple-ios15.0 -isysroot $SDK -mios-version-min=15.0 -stdlib=libc++ -I/usr/include/c++/v1"
-          clang++ $TGT -std=c++17 -O2 -fvisibility=hidden -c \
-            spirv_cross.cpp spirv_cross_parsed_ir.cpp spirv_cfg.cpp spirv_parser.cpp \
-            spirv_glsl.cpp spirv_hlsl.cpp spirv_msl.cpp spirv_reflect.cpp spirv_cpp.cpp \
-            spirv_cross_containers.cpp
+          CPPS=$(ls *.cpp | tr '\n' ' ')
+          clang++ $TGT -std=c++17 -O2 -fvisibility=hidden -c $CPPS
           clang $TGT -O2 -c spirv_cross_c.c
           clang++ $TGT -dynamiclib -o libspvc.dylib *.o -Wl,-install_name,@rpath/libspvc.dylib
           file libspvc.dylib
           ls -la libspvc.dylib
-          # 验证 MSL 符号
-          strings libspvc.dylib | grep -c spvc_compiler_msl
+          echo "MSL symbols: $(strings libspvc.dylib | grep -c spvc_compiler_msl)"
       - uses: actions/upload-artifact@v4
         with:
           name: spvc-ios
